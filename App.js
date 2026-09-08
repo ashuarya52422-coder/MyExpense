@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Alert, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 export default function App() {
-  const [balance, setBalance] = useState(5000); // Initial Balance
+  const [balance, setBalance] = useState(5000);
   const [transactions, setTransactions] = useState([]);
   const [amount, setAmount] = useState('');
   const [personOrNotes, setPersonOrNotes] = useState('');
   const [category, setCategory] = useState('Food');
-  const [type, setType] = useState('Expense'); // 'Expense', 'Income', 'Udhar'
+  const [type, setType] = useState('Expense');
 
-  // EMI Reminder Item (Example)
   const emiDueDate = "10th of every month";
   const emiAmount = 1500;
 
@@ -28,7 +29,6 @@ export default function App() {
       newBalance += numAmount;
     }
 
-    // Low Balance Alert Check
     if (newBalance < 2000 && type === 'Expense') {
       Alert.alert('⚠️ Warning: Low Balance Alert!', 'Aapka balance ₹2,000 se kam ho gaya hai.');
     }
@@ -39,7 +39,7 @@ export default function App() {
       id: Date.now().toString(),
       amount: numAmount,
       type,
-      category,
+      category: type === 'Expense' ? category : 'General',
       personOrNotes: personOrNotes || 'N/A',
       date: new Date().toLocaleDateString(),
     };
@@ -49,28 +49,82 @@ export default function App() {
     setPersonOrNotes('');
   };
 
+  // PDF Generation Code
+  const exportCategoryPDF = async () => {
+    if (transactions.length === 0) {
+      Alert.alert('Notice', 'PDF banane ke liye kam se kam ek transaction hona chahiye.');
+      return;
+    }
+
+    const categoryRows = transactions.map(tx => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.date}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.type}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.category}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${tx.personOrNotes}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: ${tx.type === 'Income' ? 'green' : 'red'};">
+          ₹${tx.amount}
+        </td>
+      </tr>
+    `).join('');
+
+    const htmlContent = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h2 { color: #1976d2; text-align: center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background-color: #1976d2; color: white; padding: 10px; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h2>Family Expense & Khata Report</h2>
+          <p><strong>Total Remaining Balance:</strong> ₹${balance}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Note/Person</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${categoryRows}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri);
+    } catch (error) {
+      Alert.alert('Error', 'PDF banane mein samasya aayi.');
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
-      {/* Header & Balance Card */}
       <Text style={styles.appTitle}>Family Expense & Khata App</Text>
-      
+
       <View style={[styles.balanceCard, balance < 2000 ? styles.lowBalance : styles.normalBalance]}>
         <Text style={styles.balanceLabel}>Current Balance</Text>
         <Text style={styles.balanceAmount}>₹{balance}</Text>
         {balance < 2000 && <Text style={styles.alertText}>⚠️ Low Balance Warning!</Text>}
       </View>
 
-      {/* EMI Reminder Banner */}
       <View style={styles.emiCard}>
         <Text style={styles.emiTitle}>🔔 EMI Reminder</Text>
         <Text style={styles.emiText}>Due Date: {emiDueDate} | Amount: ₹{emiAmount}</Text>
       </View>
 
-      {/* Input Form */}
       <View style={styles.formCard}>
         <Text style={styles.sectionHeader}>Nayi Entry Karein</Text>
-        
-        {/* Type Selection */}
+
         <View style={styles.typeContainer}>
           {['Expense', 'Income', 'Udhar'].map((item) => (
             <TouchableOpacity
@@ -98,7 +152,6 @@ export default function App() {
           onChangeText={setPersonOrNotes}
         />
 
-        {/* Category Picker */}
         {type === 'Expense' && (
           <View style={styles.categoryContainer}>
             {['Food', 'Groceries', 'Bills', 'Travel'].map((cat) => (
@@ -118,7 +171,11 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Transactions History */}
+      {/* PDF Export Button */}
+      <TouchableOpacity style={styles.pdfBtn} onPress={exportCategoryPDF}>
+        <Text style={styles.pdfBtnText}>📄 Export / Print Category PDF</Text>
+      </TouchableOpacity>
+
       <Text style={styles.sectionHeader}>Recent Transactions & Khata</Text>
       {transactions.length === 0 ? (
         <Text style={styles.emptyText}>Abhi koi entry nahi hai.</Text>
@@ -151,7 +208,7 @@ const styles = StyleSheet.create({
   emiCard: { backgroundColor: '#fff8e1', padding: 12, borderRadius: 8, marginBottom: 15, borderLeftWidth: 4, borderLeftColor: '#ffa000' },
   emiTitle: { fontWeight: 'bold', color: '#b78103' },
   emiText: { fontSize: 12, color: '#555', marginTop: 2 },
-  formCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 20, elevation: 2 },
+  formCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 15, elevation: 2 },
   sectionHeader: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#333' },
   typeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   typeBtn: { flex: 1, padding: 10, borderWidth: 1, borderColor: '#ccc', borderRadius: 6, alignItems: 'center', marginHorizontal: 2 },
@@ -164,6 +221,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, marginBottom: 10, backgroundColor: '#fafafa' },
   addBtn: { backgroundColor: '#1976d2', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 5 },
   addBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  pdfBtn: { backgroundColor: '#388e3c', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 20 },
+  pdfBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#888', marginTop: 10, marginBottom: 30 },
   txCard: { backgroundColor: '#fff', padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   txType: { fontWeight: 'bold', fontSize: 14 },
