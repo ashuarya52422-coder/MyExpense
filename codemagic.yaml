@@ -10,7 +10,7 @@ workflows:
           npm install
       - name: Expo Prebuild for Android
         script: |
-          npx expo prebuild --platform android
+          npx expo prebuild --platform android --no-interactive
       - name: Build APK with Gradle
         script: |
           cd android && ./gradlew assembleRelease
